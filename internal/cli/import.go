@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ITW-Welding-AB/KubeKee/internal/kdbx"
 	"github.com/spf13/cobra"
@@ -93,6 +94,11 @@ func importFile(db *kdbx.DB, filePath string) error {
 		Kind:      meta.Kind,
 		Name:      meta.Metadata.Name,
 		Namespace: meta.Metadata.Namespace,
+		Attributes: map[string]string{
+			"kubekee.version":    Version(),
+			"kubekee.createdAt":  time.Now().UTC().Format(time.RFC3339),
+			"kubekee.modifiedAt": time.Now().UTC().Format(time.RFC3339),
+		},
 	}
 
 	return db.AddEntry(entry)

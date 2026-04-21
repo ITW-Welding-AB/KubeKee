@@ -3,11 +3,14 @@ package kdbx
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/tobischo/gokeepasslib/v3"
 	w "github.com/tobischo/gokeepasslib/v3/wrappers"
 )
+
+const attrPrefix = "kubekee.attr."
 
 // DB wraps a KeePass database with its file path and credentials.
 type DB struct {
@@ -18,13 +21,14 @@ type DB struct {
 
 // Entry represents a single stored manifest/secret in KeePass.
 type Entry struct {
-	Title     string
-	Group     string // namespace or logical group
-	Content   string // raw YAML/JSON
-	Kind      string // e.g. Secret, ConfigMap
-	Name      string
-	Namespace string
-	Modified  time.Time
+	Title      string
+	Group      string // namespace or logical group
+	Content    string // raw YAML/JSON
+	Kind       string // e.g. Secret, ConfigMap
+	Name       string
+	Namespace  string
+	Modified   time.Time
+	Attributes map[string]string // additional user-defined and auto-stamped attributes
 }
 
 // CreateDB initialises a new KeePass database file.
@@ -152,21 +156,86 @@ func (d *DB) AddEntry(e Entry) error {
 		mkValue("URL", fmt.Sprintf("%s/%s", e.Namespace, e.Name)),
 	}
 
+	// Persist user-defined and auto-stamped attributes
+	for k, v := range e.Attributes {
+		entry.Values = append(entry.Values, mkValue(attrPrefix+k, v))
+	}
+
 	group.Entries = append(group.Entries, entry)
 	return nil
 }
 
-// UpdateEntry updates an existing entry's content.
-func (d *DB) UpdateEntry(title, group, newContent string) error {
+// UpdateEntry updates an existing entry's content and optional attribute overrides.
+func (d *DB) UpdateEntry(title, group, newContent string, attrOverrides map[string]string) error {
 	g := d.findOrCreateGroup(group)
 	for i := range g.Entries {
 		if getVal(g.Entries[i], "Title") == title {
+			// Update Notes (content)
+			found := false
 			for j := range g.Entries[i].Values {
 				if g.Entries[i].Values[j].Key == "Notes" {
 					g.Entries[i].Values[j].Value.Content = newContent
+					found = true
+					break
+				}
+			}
+			if !found {
+				g.Entries[i].Values = append(g.Entries[i].Values, mkProtectedValue("Notes", newContent))
+			}
+			// Apply attribute overrides (upsert)
+			for k, v := range attrOverrides {
+				fullKey := attrPrefix + k
+				updated := false
+				for j := range g.Entries[i].Values {
+					if g.Entries[i].Values[j].Key == fullKey {
+						g.Entries[i].Values[j].Value.Content = v
+						updated = true
+						break
+					}
+				}
+				if !updated {
+					g.Entries[i].Values = append(g.Entries[i].Values, mkValue(fullKey, v))
+				}
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("entry %q not found in group %q", title, group)
+}
+
+// SetAttribute sets (upserts) a custom attribute on an entry.
+func (d *DB) SetAttribute(title, group, key, value string) error {
+	g := d.findOrCreateGroup(group)
+	fullKey := attrPrefix + key
+	for i := range g.Entries {
+		if getVal(g.Entries[i], "Title") == title {
+			for j := range g.Entries[i].Values {
+				if g.Entries[i].Values[j].Key == fullKey {
+					g.Entries[i].Values[j].Value.Content = value
 					return nil
 				}
 			}
+			g.Entries[i].Values = append(g.Entries[i].Values, mkValue(fullKey, value))
+			return nil
+		}
+	}
+	return fmt.Errorf("entry %q not found in group %q", title, group)
+}
+
+// DeleteAttribute removes a custom attribute from an entry.
+func (d *DB) DeleteAttribute(title, group, key string) error {
+	g := d.findOrCreateGroup(group)
+	fullKey := attrPrefix + key
+	for i := range g.Entries {
+		if getVal(g.Entries[i], "Title") == title {
+			vals := g.Entries[i].Values
+			for j := range vals {
+				if vals[j].Key == fullKey {
+					g.Entries[i].Values = append(vals[:j], vals[j+1:]...)
+					return nil
+				}
+			}
+			return fmt.Errorf("attribute %q not found on entry %q", key, title)
 		}
 	}
 	return fmt.Errorf("entry %q not found in group %q", title, group)
@@ -226,10 +295,17 @@ func getVal(e gokeepasslib.Entry, key string) string {
 }
 
 func entryFromKeePass(e gokeepasslib.Entry, groupName string) *Entry {
+	attrs := map[string]string{}
+	for _, v := range e.Values {
+		if strings.HasPrefix(v.Key, attrPrefix) {
+			attrs[strings.TrimPrefix(v.Key, attrPrefix)] = v.Value.Content
+		}
+	}
 	return &Entry{
-		Title:   getVal(e, "Title"),
-		Group:   groupName,
-		Content: getVal(e, "Notes"),
-		Kind:    getVal(e, "UserName"),
+		Title:      getVal(e, "Title"),
+		Group:      groupName,
+		Content:    getVal(e, "Notes"),
+		Kind:       getVal(e, "UserName"),
+		Attributes: attrs,
 	}
 }

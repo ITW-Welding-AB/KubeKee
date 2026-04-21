@@ -3,7 +3,10 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o kubekee ./cmd/kubekee
+# LDFLAGS can be injected at build time:
+#   docker build --build-arg LDFLAGS="-X github.com/ITW-Welding-AB/KubeKee/internal/cli.version=v1.2.3 -s -w" .
+ARG LDFLAGS="-s -w"
+RUN CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o kubekee ./cmd/kubekee
 
 FROM alpine:3.20
 RUN apk --no-cache add ca-certificates
