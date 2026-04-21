@@ -1,0 +1,43 @@
+# Example: KubeKee with ArgoCD Application integration
+#
+# Prerequisites:
+#   1. ArgoCD is installed on the cluster
+#   2. An ArgoCD Application exists that syncs your repo containing the .kdbx file
+#   3. A Secret with the KeePass password exists
+#   4. The git-sync sidecar or a shared volume provides the repo files at /data
+#
+# Install:
+#   helm install kubekee charts/kubekee -f charts/kubekee/examples/argocd-values.yaml
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/itw-welding-ab/kubekee
+  pullPolicy: IfNotPresent
+
+sourceMode: argocd
+
+# git-sync sidecar pulls the repo so the operator can read the .kdbx file
+gitSync:
+  enabled: true
+  repo: "https://github.com/your-org/your-infra-repo.git"
+  branch: "main"
+  subPath: ""          # Path within repo, empty = root
+  period: "60s"
+  # gitCredentialsSecret: "git-credentials"  # If repo is private
+
+argocd:
+  enabled: true
+  application:
+    name: my-infrastructure    # Name of your existing ArgoCD Application
+    namespace: argocd
+
+keepassSource:
+  create: true
+  dbPath: "secrets.kdbx"
+  passwordSecretRef:
+    name: kubekee-password
+    key: password
+  targetNamespace: ""
+  interval: "5m"
+

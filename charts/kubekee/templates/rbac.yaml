@@ -1,0 +1,51 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kubekee.fullname" . }}
+  labels:
+    {{- include "kubekee.labels" . | nindent 4 }}
+rules:
+  # KeePassSource CRD
+  - apiGroups: ["kubekee.itwwelding.com"]
+    resources: ["keepasssources"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["kubekee.itwwelding.com"]
+    resources: ["keepasssources/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["kubekee.itwwelding.com"]
+    resources: ["keepasssources/finalizers"]
+    verbs: ["update"]
+  # Core resources the operator can manage
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps", "services", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Flux GitRepository read access
+  - apiGroups: ["source.toolkit.fluxcd.io"]
+    resources: ["gitrepositories"]
+    verbs: ["get", "list", "watch"]
+  # ArgoCD Application read access
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "kubekee.fullname" . }}
+  labels:
+    {{- include "kubekee.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "kubekee.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kubekee.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+

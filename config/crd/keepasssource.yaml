@@ -1,0 +1,121 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: keepasssources.kubekee.itwwelding.com
+spec:
+  group: kubekee.itwwelding.com
+  names:
+    kind: KeePassSource
+    listKind: KeePassSourceList
+    plural: keepasssources
+    singular: keepasssource
+    shortNames:
+      - kps
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: DB Path
+          type: string
+          jsonPath: .spec.dbPath
+        - name: Source
+          type: string
+          jsonPath: .spec.sourceRef.kind
+        - name: Interval
+          type: string
+          jsonPath: .spec.interval
+        - name: Last Sync
+          type: date
+          jsonPath: .status.lastSyncTime
+        - name: Ready
+          type: string
+          jsonPath: ".status.conditions[?(@.type=='Ready')].status"
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - passwordSecretRef
+              properties:
+                dbPath:
+                  type: string
+                  description: "Path to the .kdbx file (used when no sourceRef)"
+                sourceRef:
+                  type: object
+                  description: "Reference to a Flux GitRepository or ArgoCD Application"
+                  required:
+                    - kind
+                    - name
+                  properties:
+                    kind:
+                      type: string
+                      enum: ["GitRepository", "Application"]
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                dbFileName:
+                  type: string
+                  description: "Name of the .kdbx file within the source artifact"
+                  default: "secrets.kdbx"
+                passwordSecretRef:
+                  type: object
+                  required:
+                    - name
+                    - key
+                  properties:
+                    name:
+                      type: string
+                    key:
+                      type: string
+                targetNamespace:
+                  type: string
+                interval:
+                  type: string
+                  default: "5m"
+                suspend:
+                  type: boolean
+                  default: false
+                entries:
+                  type: array
+                  description: "Filter: only sync these entry titles"
+                  items:
+                    type: string
+                groups:
+                  type: array
+                  description: "Filter: only sync entries in these groups"
+                  items:
+                    type: string
+            status:
+              type: object
+              properties:
+                lastSyncTime:
+                  type: string
+                  format: date-time
+                appliedEntries:
+                  type: integer
+                sourceArtifactRevision:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+

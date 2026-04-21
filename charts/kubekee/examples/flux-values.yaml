@@ -1,0 +1,40 @@
+# Example: KubeKee with Flux GitRepository integration
+#
+# Prerequisites:
+#   1. Flux is installed on the cluster
+#   2. A GitRepository resource exists that syncs your repo containing the .kdbx file
+#   3. A Secret with the KeePass password exists
+#
+# Install:
+#   helm install kubekee charts/kubekee -f charts/kubekee/examples/flux-values.yaml
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/itw-welding-ab/kubekee
+  pullPolicy: IfNotPresent
+
+sourceMode: flux
+
+flux:
+  enabled: true
+  gitRepository:
+    name: my-infrastructure    # Name of your existing Flux GitRepository
+    namespace: flux-system
+
+keepassSource:
+  create: true
+  dbPath: "secrets.kdbx"       # Filename within the git repo
+  passwordSecretRef:
+    name: kubekee-password     # Secret containing the KeePass DB password
+    key: password
+  targetNamespace: ""          # Empty = use namespace from each manifest
+  interval: "5m"
+  # Optional: filter which entries to sync
+  # entries:
+  #   - my-secret
+  #   - my-configmap
+  # groups:
+  #   - production
+  #   - staging
+

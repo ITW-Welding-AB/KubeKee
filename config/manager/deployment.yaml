@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubekee-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubekee-controller
+  namespace: kubekee-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubekee-controller
+rules:
+  - apiGroups: ["kubekee.itwwelding.com"]
+    resources: ["keepasssources"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["kubekee.itwwelding.com"]
+    resources: ["keepasssources/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps", "services", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubekee-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubekee-controller
+subjects:
+  - kind: ServiceAccount
+    name: kubekee-controller
+    namespace: kubekee-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubekee-controller
+  namespace: kubekee-system
+  labels:
+    app: kubekee-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubekee-controller
+  template:
+    metadata:
+      labels:
+        app: kubekee-controller
+    spec:
+      serviceAccountName: kubekee-controller
+      containers:
+        - name: manager
+          image: ghcr.io/itw-welding-ab/kubekee:latest
+          args: ["operator"]
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: keepass-db
+              mountPath: /data
+              readOnly: true
+        # Git-sync sidecar for pulling .kdbx from git
+        - name: git-sync
+          image: registry.k8s.io/git-sync/git-sync:v4.2.1
+          args:
+            - --repo=$(GIT_REPO)
+            - --root=/data
+            - --period=60s
+          env:
+            - name: GIT_REPO
+              valueFrom:
+                configMapKeyRef:
+                  name: kubekee-config
+                  key: git-repo
+          volumeMounts:
+            - name: keepass-db
+              mountPath: /data
+      volumes:
+        - name: keepass-db
+          emptyDir: {}
+

@@ -1,0 +1,13 @@
+{{- if and (or .Values.gitSync.enabled (eq .Values.sourceMode "gitSync")) .Values.gitSync.subPath }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kubekee.fullname" . }}-git-sparse
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubekee.labels" . | nindent 4 }}
+data:
+  sparse: |
+    {{ .Values.gitSync.subPath }}
+{{- end }}
+

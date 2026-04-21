@@ -1,0 +1,119 @@
+# KubeKee Operator Helm values
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/itw-welding-ab/kubekee
+  tag: ""  # defaults to appVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# -- Operator resource limits
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# -- Install CRDs with the chart
+crds:
+  install: true
+
+# -- Git source integration mode: "none", "gitSync", "flux", "argocd"
+sourceMode: none
+
+# -- git-sync sidecar configuration (when sourceMode: gitSync)
+gitSync:
+  enabled: false
+  image: registry.k8s.io/git-sync/git-sync:v4.4.0
+  repo: ""
+  branch: "main"
+  # -- Path within the repo to the .kdbx file directory
+  subPath: ""
+  period: "60s"
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 32Mi
+  # -- Secret name containing git credentials (optional)
+  # Must have keys: username, password (or token)
+  gitCredentialsSecret: ""
+
+# -- Flux GitRepository integration (when sourceMode: flux)
+flux:
+  enabled: false
+  # -- Reference to an existing Flux GitRepository object
+  gitRepository:
+    name: ""
+    namespace: "flux-system"
+
+# -- ArgoCD integration (when sourceMode: argocd)
+argocd:
+  enabled: false
+  # -- Reference to an existing ArgoCD Application
+  application:
+    name: ""
+    namespace: "argocd"
+
+# -- Default KeePassSource to create on install (optional)
+keepassSource:
+  create: false
+  # -- Path to the .kdbx file inside the synced volume
+  dbPath: "/data/secrets.kdbx"
+  # -- Name of the Secret containing the KeePass password
+  passwordSecretRef:
+    name: "kubekee-password"
+    key: "password"
+  # -- Target namespace for applied resources (empty = use manifest namespace)
+  targetNamespace: ""
+  # -- Reconciliation interval
+  interval: "5m"
+  # -- Suspend reconciliation
+  suspend: false
+  # -- Entries filter: list of entry titles to sync (empty = all)
+  entries: []
+  # -- Groups filter: list of groups to sync (empty = all)
+  groups: []
+
+# -- Extra volumes to mount into the operator pod
+extraVolumes: []
+# -- Extra volume mounts for the operator container
+extraVolumeMounts: []
+
+# -- Extra environment variables
+extraEnv: []
+
+# -- Pod annotations
+podAnnotations: {}
+
+# -- Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+

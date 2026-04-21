@@ -1,0 +1,42 @@
+{{- if .Values.keepassSource.create }}
+apiVersion: kubekee.itwwelding.com/v1alpha1
+kind: KeePassSource
+metadata:
+  name: {{ include "kubekee.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubekee.labels" . | nindent 4 }}
+spec:
+  {{- if and (eq .Values.sourceMode "flux") .Values.flux.enabled }}
+  sourceRef:
+    kind: GitRepository
+    name: {{ .Values.flux.gitRepository.name }}
+    namespace: {{ .Values.flux.gitRepository.namespace | default "flux-system" }}
+  dbFileName: {{ .Values.keepassSource.dbPath | default "secrets.kdbx" }}
+  {{- else if and (eq .Values.sourceMode "argocd") .Values.argocd.enabled }}
+  sourceRef:
+    kind: Application
+    name: {{ .Values.argocd.application.name }}
+    namespace: {{ .Values.argocd.application.namespace | default "argocd" }}
+  dbFileName: {{ .Values.keepassSource.dbPath | default "secrets.kdbx" }}
+  {{- else }}
+  dbPath: {{ .Values.keepassSource.dbPath }}
+  {{- end }}
+  passwordSecretRef:
+    name: {{ .Values.keepassSource.passwordSecretRef.name }}
+    key: {{ .Values.keepassSource.passwordSecretRef.key }}
+  {{- if .Values.keepassSource.targetNamespace }}
+  targetNamespace: {{ .Values.keepassSource.targetNamespace }}
+  {{- end }}
+  interval: {{ .Values.keepassSource.interval | default "5m" }}
+  suspend: {{ .Values.keepassSource.suspend | default false }}
+  {{- if .Values.keepassSource.entries }}
+  entries:
+    {{- toYaml .Values.keepassSource.entries | nindent 4 }}
+  {{- end }}
+  {{- if .Values.keepassSource.groups }}
+  groups:
+    {{- toYaml .Values.keepassSource.groups | nindent 4 }}
+  {{- end }}
+{{- end }}
+

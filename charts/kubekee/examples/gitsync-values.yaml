@@ -1,0 +1,41 @@
+# Example: KubeKee with standalone git-sync (no Flux/ArgoCD)
+#
+# The operator uses a git-sync sidecar to pull a repo containing
+# the .kdbx file, then syncs entries to the cluster.
+#
+# Install:
+#   helm install kubekee charts/kubekee -f charts/kubekee/examples/gitsync-values.yaml
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/itw-welding-ab/kubekee
+  pullPolicy: IfNotPresent
+
+sourceMode: gitSync
+
+gitSync:
+  enabled: true
+  repo: "https://github.com/your-org/your-infra-repo.git"
+  branch: "main"
+  subPath: ""
+  period: "60s"
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 32Mi
+  # Uncomment if private repo:
+  # gitCredentialsSecret: "git-credentials"
+
+keepassSource:
+  create: true
+  dbPath: "/data/secrets.kdbx"
+  passwordSecretRef:
+    name: kubekee-password
+    key: password
+  targetNamespace: ""
+  interval: "5m"
+

@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kubekee.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubekee.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "kubekee.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kubekee.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "kubekee.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: manager
+          image: "{{ .Values.image.repository }}:{{ include "kubekee.imageTag" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["operator"]
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: keepass-data
+              mountPath: {{ include "kubekee.dataPath" . }}
+              readOnly: true
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- if or .Values.gitSync.enabled (eq .Values.sourceMode "gitSync") }}
+        # git-sync sidecar - pulls .kdbx from a git repository
+        - name: git-sync
+          image: {{ .Values.gitSync.image }}
+          args:
+            - --repo={{ .Values.gitSync.repo }}
+            - --ref={{ .Values.gitSync.branch }}
+            - --root={{ include "kubekee.dataPath" . }}
+            - --period={{ .Values.gitSync.period }}
+            {{- if .Values.gitSync.subPath }}
+            - --sparse-checkout-file=/etc/git-sync/sparse
+            {{- end }}
+          {{- if .Values.gitSync.gitCredentialsSecret }}
+          env:
+            - name: GITSYNC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gitSync.gitCredentialsSecret }}
+                  key: username
+            - name: GITSYNC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gitSync.gitCredentialsSecret }}
+                  key: password
+          {{- end }}
+          {{- with .Values.gitSync.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: keepass-data
+              mountPath: {{ include "kubekee.dataPath" . }}
+            {{- if .Values.gitSync.subPath }}
+            - name: git-sync-sparse
+              mountPath: /etc/git-sync
+            {{- end }}
+        {{- end }}
+      volumes:
+        - name: keepass-data
+          emptyDir: {}
+        {{- if and (or .Values.gitSync.enabled (eq .Values.sourceMode "gitSync")) .Values.gitSync.subPath }}
+        - name: git-sync-sparse
+          configMap:
+            name: {{ include "kubekee.fullname" . }}-git-sparse
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
