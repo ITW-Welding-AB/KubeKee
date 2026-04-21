@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/ITW-Welding-AB/KubeKee/internal/kdbx"
 	"github.com/spf13/cobra"
@@ -68,7 +69,10 @@ var editCmd = &cobra.Command{
 			return nil
 		}
 
-		if err := db.UpdateEntry(args[0], editGroup, string(newContent)); err != nil {
+		if err := db.UpdateEntry(args[0], editGroup, string(newContent), map[string]string{
+			"kubekee.version":    Version(),
+			"kubekee.modifiedAt": time.Now().UTC().Format(time.RFC3339),
+		}); err != nil {
 			return err
 		}
 
