@@ -1,2 +1,2 @@
 # KubeKee
-K8s KubePass CLI &amp; Operator tool for CI/CD workflows
+K8s KeePass CLI &amp; Operator tool for CI/CD workflows
