@@ -14,6 +14,7 @@ import (
 )
 
 var importGroup string
+var importForce bool
 
 var importCmd = &cobra.Command{
 	Use:   "import <file.yaml|file.json> [files...]",
@@ -30,7 +31,7 @@ var importCmd = &cobra.Command{
 		}
 
 		for _, file := range args {
-			if err := importFile(db, file); err != nil {
+			if err := importFile(db, file, importForce); err != nil {
 				return fmt.Errorf("importing %s: %w", file, err)
 			}
 		}
@@ -44,7 +45,7 @@ var importCmd = &cobra.Command{
 	},
 }
 
-func importFile(db *kdbx.DB, filePath string) error {
+func importFile(db *kdbx.DB, filePath string, force bool) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
@@ -119,10 +120,19 @@ func importFile(db *kdbx.DB, filePath string) error {
 		Attributes: attrs,
 	}
 
+	if force {
+		err := db.UpdateEntry(title, group, string(data), attrs)
+		if err == nil {
+			return nil
+		}
+		// Entry doesn't exist yet; fall through to add it.
+	}
+
 	return db.AddEntry(entry)
 }
 
 func init() {
 	importCmd.Flags().StringVar(&importGroup, "group", "", "KeePass group/namespace to store entries in")
+	importCmd.Flags().BoolVar(&importForce, "force", false, "Overwrite an existing entry instead of returning an error")
 	rootCmd.AddCommand(importCmd)
 }
