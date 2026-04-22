@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	dbPath   string
-	password string
+	dbPath           string
+	password         string
+	annotationPrefix = "kubekee."
 )
 
 var rootCmd = &cobra.Command{
