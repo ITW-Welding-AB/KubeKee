@@ -50,12 +50,13 @@ func importFile(db *kdbx.DB, filePath string) error {
 		return err
 	}
 
-	// Parse to extract metadata
+	// Parse to extract metadata (including annotations)
 	var meta struct {
 		Kind     string `yaml:"kind" json:"kind"`
 		Metadata struct {
-			Name      string `yaml:"name" json:"name"`
-			Namespace string `yaml:"namespace" json:"namespace"`
+			Name        string            `yaml:"name" json:"name"`
+			Namespace   string            `yaml:"namespace" json:"namespace"`
+			Annotations map[string]string `yaml:"annotations" json:"annotations"`
 		} `yaml:"metadata" json:"metadata"`
 	}
 
@@ -87,18 +88,35 @@ func importFile(db *kdbx.DB, filePath string) error {
 		group = meta.Metadata.Namespace
 	}
 
+	// Seed attributes with kubekee lifecycle stamps.
+	attrs := map[string]string{
+		"version":    Version(),
+		"createdAt":  time.Now().UTC().Format(time.RFC3339),
+		"modifiedAt": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Promote annotations from the manifest into entry attributes.
+	// Annotations that already carry the kubekee. prefix are stored without the prefix
+	// (they are kubekee-owned). All other annotations are stored verbatim.
+	for k, v := range meta.Metadata.Annotations {
+		attrKey := k
+		if strings.HasPrefix(k, annotationPrefix) {
+			attrKey = strings.TrimPrefix(k, annotationPrefix)
+		}
+		// Don't overwrite lifecycle stamps already set above.
+		if _, exists := attrs[attrKey]; !exists {
+			attrs[attrKey] = v
+		}
+	}
+
 	entry := kdbx.Entry{
-		Title:     title,
-		Group:     group,
-		Content:   string(data),
-		Kind:      meta.Kind,
-		Name:      meta.Metadata.Name,
-		Namespace: meta.Metadata.Namespace,
-		Attributes: map[string]string{
-			"kubekee.version":    Version(),
-			"kubekee.createdAt":  time.Now().UTC().Format(time.RFC3339),
-			"kubekee.modifiedAt": time.Now().UTC().Format(time.RFC3339),
-		},
+		Title:      title,
+		Group:      group,
+		Content:    string(data),
+		Kind:       meta.Kind,
+		Name:       meta.Metadata.Name,
+		Namespace:  meta.Metadata.Namespace,
+		Attributes: attrs,
 	}
 
 	return db.AddEntry(entry)
