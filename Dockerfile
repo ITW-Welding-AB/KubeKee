@@ -10,6 +10,8 @@ RUN CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o kubekee ./cmd/kubekee
 
 FROM alpine:3.20
 RUN apk --no-cache add ca-certificates
+    && addgroup -S -g 65532 kubekee \
+    && adduser -S -u 65532 -G kubekee kubekee
 COPY --from=builder /app/kubekee /usr/local/bin/kubekee
+USER 65532:65532
 ENTRYPOINT ["kubekee"]
-
