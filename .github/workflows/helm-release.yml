@@ -49,7 +49,7 @@ jobs:
 
       - name: Push Helm chart to OCI registry
         run: |
-          helm push kubekee-${{ steps.chart-version.outputs.version }}.tgz oci://ghcr.io/itw-welding-ab
+          helm push kubekee-${{ steps.chart-version.outputs.version }}.tgz oci://ghcr.io/itw-welding-ab/charts
 
       - name: Logout from GHCR
         if: always()
