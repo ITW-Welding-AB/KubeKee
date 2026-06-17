@@ -1,4 +1,4 @@
-<div>
+﻿<div>
     <img align="right" width="80" alt="Elga logo RGB" src="https://github.com/ITW-Welding-AB/.github/blob/main/images/Elga-logo-RGB.png?raw=true" />
 </div>
 <br clear="left"/>
@@ -89,20 +89,26 @@ kubekee edit my-secret --db secrets.kdbx --password mypassword
 ---
 
 ## Helm Installation
-
+The chart is published as an OCI artifact to the GitHub Container Registry.
 ### Install with Helm
 
 ```bash
-helm install kubekee charts/kubekee -n kubekee-system --create-namespace
+helm install kubekee oci://ghcr.io/itw-welding-ab/charts/kubekee \
+  -n kubekee-system --create-namespace
 ```
-
+Pin to a specific chart version with `--version`:
+```bash
+helm install kubekee oci://ghcr.io/itw-welding-ab/charts/kubekee \
+  --version 0.1.0 \
+  -n kubekee-system --create-namespace
+```
 ### Integration Modes
 
 KubeKee supports four source modes via `sourceMode`:
 
 | Mode      | Description                                       |
 |-----------|---------------------------------------------------|
-| `none`    | Direct file path — mount the `.kdbx` via a volume |
+| `none`    | Direct file path -- mount the `.kdbx` via a volume |
 | `gitSync` | Built-in git-sync sidecar pulls the repo          |
 | `flux`    | Integrates with an existing Flux `GitRepository`  |
 | `argocd`  | Integrates with an existing ArgoCD `Application`  |
@@ -112,8 +118,9 @@ KubeKee supports four source modes via `sourceMode`:
 If you already have Flux installed with a `GitRepository` that syncs your infrastructure repo containing a `.kdbx` file:
 
 ```bash
-helm install kubekee charts/kubekee -n kubekee-system --create-namespace \
-  -f charts/kubekee/examples/flux-values.yaml \
+helm install kubekee oci://ghcr.io/itw-welding-ab/charts/kubekee \
+  -n kubekee-system --create-namespace \
+  --set sourceMode=flux \
   --set flux.gitRepository.name=my-infrastructure \
   --set keepassSource.passwordSecretRef.name=kubekee-password
 ```
@@ -145,8 +152,9 @@ spec:
 If you have ArgoCD syncing your repo:
 
 ```bash
-helm install kubekee charts/kubekee -n kubekee-system --create-namespace \
-  -f charts/kubekee/examples/argocd-values.yaml \
+helm install kubekee oci://ghcr.io/itw-welding-ab/charts/kubekee \
+  -n kubekee-system --create-namespace \
+  --set sourceMode=argocd \
   --set argocd.application.name=my-infrastructure \
   --set gitSync.repo=https://github.com/your-org/your-repo.git
 ```
@@ -176,8 +184,9 @@ spec:
 No Flux or ArgoCD? Use the built-in git-sync sidecar:
 
 ```bash
-helm install kubekee charts/kubekee -n kubekee-system --create-namespace \
-  -f charts/kubekee/examples/gitsync-values.yaml \
+helm install kubekee oci://ghcr.io/itw-welding-ab/charts/kubekee \
+  -n kubekee-system --create-namespace \
+  --set sourceMode=gitSync \
   --set gitSync.repo=https://github.com/your-org/your-repo.git
 ```
 
