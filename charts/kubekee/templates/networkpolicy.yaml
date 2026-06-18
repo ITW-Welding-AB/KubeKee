@@ -1,0 +1,25 @@
+{{- if and (eq .Values.sourceMode "flux") .Values.flux.enabled (ne .Values.flux.createNetworkPolicy false) }}
+{{- $fluxNS := .Values.flux.gitRepository.namespace | default "flux-system" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "kubekee.fullname" . }}-allow-source-controller
+  namespace: {{ $fluxNS }}
+  labels:
+    {{- include "kubekee.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: source-controller
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+      ports:
+        - protocol: TCP
+          port: 9090
+{{- end }}

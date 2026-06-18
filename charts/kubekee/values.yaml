@@ -63,6 +63,10 @@ flux:
   gitRepository:
     name: ""
     namespace: "flux-system"
+  # -- Create a NetworkPolicy in the Flux namespace to allow the operator
+  # to reach source-controller's HTTP artifact server (port 9090).
+  # Disable if your cluster does not use NetworkPolicies.
+  createNetworkPolicy: true
 
 # -- ArgoCD integration (when sourceMode: argocd)
 argocd:

@@ -72,7 +72,7 @@ func (r *KeePassSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		r.setCondition(&source, "Ready", metav1.ConditionFalse, "DBOpenError", err.Error())
 		_ = r.Status().Update(ctx, &source)
-		return ctrl.Result{RequeueAfter: time.Minute}, err
+		return ctrl.Result{}, err
 	}
 
 	// Get entries with filtering
