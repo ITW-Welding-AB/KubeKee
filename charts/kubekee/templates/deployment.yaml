@@ -97,6 +97,8 @@ spec:
       volumes:
         - name: keepass-data
           emptyDir: {}
+        - name: tmp
+          emptyDir: {}
         {{- if and (or .Values.gitSync.enabled (eq .Values.sourceMode "gitSync")) .Values.gitSync.subPath }}
         - name: git-sync-sparse
           configMap:
