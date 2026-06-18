@@ -1,4 +1,4 @@
-{{- if .Values.keepassSource.create }}
+{{- if or .Values.keepassSource.create (ne .Values.sourceMode "none") }}
 apiVersion: kubekee.itwwelding.com/v1alpha1
 kind: KeePassSource
 metadata:

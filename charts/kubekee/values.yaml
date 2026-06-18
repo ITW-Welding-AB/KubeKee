@@ -72,7 +72,9 @@ argocd:
     name: ""
     namespace: "argocd"
 
-# -- Default KeePassSource to create on install (optional)
+# -- Default KeePassSource to create on install.
+# Automatically created when sourceMode is not "none".
+# Set create: true to also create one when sourceMode is "none" (direct dbPath mode).
 keepassSource:
   create: false
   # -- Path to the .kdbx file inside the synced volume
