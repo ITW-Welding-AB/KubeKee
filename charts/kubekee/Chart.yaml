@@ -3,7 +3,7 @@ name: kubekee
 description: KubeKee - K8s KeePass Operator for secure secret management in GitOps workflows
 type: application
 version: 0.1.5
-appVersion: "0.3.3"
+appVersion: "0.3.4"
 home: https://github.com/ITW-Welding-AB/KubeKee
 maintainers:
   - name: ITW Welding AB
