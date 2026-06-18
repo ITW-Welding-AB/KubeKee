@@ -1,6 +1,8 @@
 package operator
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,7 +15,6 @@ import (
 
 	"github.com/ITW-Welding-AB/KubeKee/api/v1alpha1"
 	"github.com/ITW-Welding-AB/KubeKee/internal/kdbx"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,17 +35,14 @@ type KeePassSourceReconciler struct {
 
 func (r *KeePassSourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-
 	var source v1alpha1.KeePassSource
 	if err := r.Get(ctx, req.NamespacedName, &source); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
 	if source.Spec.Suspend {
 		logger.Info("reconciliation suspended")
 		return ctrl.Result{}, nil
 	}
-
 	// Get password from secret
 	password, err := r.getPassword(ctx, source.Namespace, source.Spec.PasswordSecretRef)
 	if err != nil {
@@ -52,7 +50,6 @@ func (r *KeePassSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		_ = r.Status().Update(ctx, &source)
 		return ctrl.Result{RequeueAfter: time.Minute}, err
 	}
-
 	// Resolve the .kdbx file path
 	dbPath, revision, err := r.resolveDBPath(ctx, &source)
 	if err != nil {
@@ -60,13 +57,11 @@ func (r *KeePassSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		_ = r.Status().Update(ctx, &source)
 		return ctrl.Result{RequeueAfter: time.Minute}, err
 	}
-
 	// Skip if the revision hasn't changed (source-based reconciliation)
 	if revision != "" && revision == source.Status.SourceArtifactRevision {
 		logger.Info("source artifact revision unchanged, skipping", "revision", revision)
 		return ctrl.Result{RequeueAfter: r.getInterval(source.Spec.Interval)}, nil
 	}
-
 	// Open KeePass DB
 	db, err := kdbx.OpenDB(dbPath, password)
 	if err != nil {
@@ -74,10 +69,8 @@ func (r *KeePassSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		_ = r.Status().Update(ctx, &source)
 		return ctrl.Result{}, err
 	}
-
 	// Get entries with filtering
 	entries := r.filterEntries(db, source.Spec.Groups, source.Spec.Entries)
-
 	// Apply entries
 	applied := 0
 	for _, entry := range entries {
@@ -90,7 +83,6 @@ func (r *KeePassSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		applied++
 	}
-
 	now := metav1.Now()
 	source.Status.LastSyncTime = &now
 	source.Status.AppliedEntries = applied
@@ -101,7 +93,6 @@ func (r *KeePassSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := r.Status().Update(ctx, &source); err != nil {
 		return ctrl.Result{}, err
 	}
-
 	logger.Info("reconciliation complete", "applied", applied, "revision", revision)
 	return ctrl.Result{RequeueAfter: r.getInterval(source.Spec.Interval)}, nil
 }
@@ -115,13 +106,11 @@ func (r *KeePassSourceReconciler) resolveDBPath(ctx context.Context, source *v1a
 		}
 		return source.Spec.DBPath, "", nil
 	}
-
 	ref := source.Spec.SourceRef
 	ns := ref.Namespace
 	if ns == "" {
 		ns = source.Namespace
 	}
-
 	switch ref.Kind {
 	case "GitRepository":
 		return r.resolveFluxGitRepository(ctx, ref.Name, ns, source.Spec.DBFileName)
@@ -136,7 +125,6 @@ func (r *KeePassSourceReconciler) resolveDBPath(ctx context.Context, source *v1a
 // URL and revision, then downloads the .kdbx file from the artifact.
 func (r *KeePassSourceReconciler) resolveFluxGitRepository(ctx context.Context, name, namespace, dbFileName string) (string, string, error) {
 	logger := log.FromContext(ctx)
-
 	gitRepo := &unstructured.Unstructured{}
 	gitRepo.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "source.toolkit.fluxcd.io",
@@ -146,7 +134,6 @@ func (r *KeePassSourceReconciler) resolveFluxGitRepository(ctx context.Context, 
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, gitRepo); err != nil {
 		return "", "", fmt.Errorf("getting Flux GitRepository %s/%s: %w", namespace, name, err)
 	}
-
 	// Extract artifact info from status
 	status, ok := gitRepo.Object["status"].(map[string]interface{})
 	if !ok {
@@ -156,15 +143,12 @@ func (r *KeePassSourceReconciler) resolveFluxGitRepository(ctx context.Context, 
 	if !ok {
 		return "", "", fmt.Errorf("GitRepository %s/%s has no artifact", namespace, name)
 	}
-
 	revision, _ := artifact["revision"].(string)
 	artifactURL, _ := artifact["url"].(string)
 	if artifactURL == "" {
 		return "", "", fmt.Errorf("GitRepository %s/%s artifact has no URL", namespace, name)
 	}
-
 	logger.Info("resolved Flux GitRepository", "name", name, "revision", revision)
-
 	dbPath, err := r.downloadArtifact(artifactURL, dbFileName)
 	if err != nil {
 		return "", "", fmt.Errorf("downloading Flux artifact: %w", err)
@@ -176,7 +160,6 @@ func (r *KeePassSourceReconciler) resolveFluxGitRepository(ctx context.Context, 
 // revision and locate the .kdbx file on a shared volume.
 func (r *KeePassSourceReconciler) resolveArgoCDApplication(ctx context.Context, name, namespace, dbFileName string) (string, string, error) {
 	logger := log.FromContext(ctx)
-
 	app := &unstructured.Unstructured{}
 	app.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "argoproj.io",
@@ -186,68 +169,92 @@ func (r *KeePassSourceReconciler) resolveArgoCDApplication(ctx context.Context, 
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, app); err != nil {
 		return "", "", fmt.Errorf("getting ArgoCD Application %s/%s: %w", namespace, name, err)
 	}
-
 	status, _ := app.Object["status"].(map[string]interface{})
 	sync, _ := status["sync"].(map[string]interface{})
 	revision, _ := sync["revision"].(string)
-
 	spec, _ := app.Object["spec"].(map[string]interface{})
 	appSource, _ := spec["source"].(map[string]interface{})
 	repoPath, _ := appSource["path"].(string)
-
 	logger.Info("resolved ArgoCD Application", "name", name, "revision", revision, "path", repoPath)
-
 	if dbFileName == "" {
 		dbFileName = "secrets.kdbx"
 	}
-
 	candidates := []string{
 		filepath.Join("/data", repoPath, dbFileName),
 		filepath.Join("/data", dbFileName),
 	}
-
 	for _, candidate := range candidates {
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, revision, nil
 		}
 	}
-
 	return "", "", fmt.Errorf("could not find %s in ArgoCD paths: %v", dbFileName, candidates)
 }
 
-// downloadArtifact downloads a file from a Flux source-controller artifact URL.
+// downloadArtifact downloads a Flux source-controller artifact (tar.gz) and
+// extracts the named .kdbx file from it into a temporary directory.
 func (r *KeePassSourceReconciler) downloadArtifact(artifactURL, dbFileName string) (string, error) {
 	if dbFileName == "" {
 		dbFileName = "secrets.kdbx"
 	}
-
-	resp, err := http.Get(artifactURL)
+	resp, err := http.Get(artifactURL) //nolint:noctx
 	if err != nil {
 		return "", fmt.Errorf("fetching artifact: %w", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("artifact returned status %d", resp.StatusCode)
 	}
-
 	tmpDir, err := os.MkdirTemp("", "kubekee-artifact-*")
 	if err != nil {
 		return "", err
 	}
-
-	outPath := filepath.Join(tmpDir, dbFileName)
-	outFile, err := os.Create(outPath)
+	// Flux artifacts are tar.gz archives; extract the .kdbx file from them.
+	outPath, err := extractKDBXFromTarGz(resp.Body, tmpDir, dbFileName)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("extracting %s from artifact: %w", dbFileName, err)
 	}
-	defer outFile.Close()
-
-	if _, err := io.Copy(outFile, resp.Body); err != nil {
-		return "", fmt.Errorf("writing artifact: %w", err)
-	}
-
 	return outPath, nil
+}
+
+// extractKDBXFromTarGz reads a gzip-compressed tar stream and writes the first
+// entry whose base name matches dbFileName to outDir. It returns the path of
+// the extracted file.
+func extractKDBXFromTarGz(r io.Reader, outDir, dbFileName string) (string, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return "", fmt.Errorf("initialising gzip reader: %w", err)
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("reading tar: %w", err)
+		}
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		// Match on the base filename so paths like "./subdir/secrets.kdbx" work.
+		if filepath.Base(hdr.Name) != dbFileName {
+			continue
+		}
+		outPath := filepath.Join(outDir, dbFileName)
+		outFile, err := os.Create(outPath)
+		if err != nil {
+			return "", err
+		}
+		if _, err := io.Copy(outFile, tr); err != nil {
+			outFile.Close()
+			return "", fmt.Errorf("writing extracted file: %w", err)
+		}
+		outFile.Close()
+		return outPath, nil
+	}
+	return "", fmt.Errorf("file %q not found in artifact archive", dbFileName)
 }
 
 // filterEntries filters DB entries based on group and title filters.
@@ -255,7 +262,6 @@ func (r *KeePassSourceReconciler) filterEntries(db *kdbx.DB, groups, entries []s
 	if len(groups) == 0 && len(entries) == 0 {
 		return db.ListEntries("")
 	}
-
 	var result []kdbx.Entry
 	if len(groups) > 0 {
 		for _, group := range groups {
@@ -264,7 +270,6 @@ func (r *KeePassSourceReconciler) filterEntries(db *kdbx.DB, groups, entries []s
 	} else {
 		result = db.ListEntries("")
 	}
-
 	if len(entries) > 0 {
 		titleSet := make(map[string]bool, len(entries))
 		for _, e := range entries {
@@ -278,10 +283,8 @@ func (r *KeePassSourceReconciler) filterEntries(db *kdbx.DB, groups, entries []s
 		}
 		return filtered
 	}
-
 	return result
 }
-
 func (r *KeePassSourceReconciler) getPassword(ctx context.Context, namespace string, ref v1alpha1.SecretKeyRef) (string, error) {
 	var secret corev1.Secret
 	if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: namespace}, &secret); err != nil {
@@ -293,10 +296,8 @@ func (r *KeePassSourceReconciler) getPassword(ctx context.Context, namespace str
 	}
 	return string(data), nil
 }
-
 func (r *KeePassSourceReconciler) applyEntry(ctx context.Context, entry kdbx.Entry, targetNS string) error {
 	obj := &unstructured.Unstructured{}
-
 	// Try JSON first, then YAML
 	if err := json.Unmarshal([]byte(entry.Content), &obj.Object); err != nil {
 		decoder := utilyaml.NewYAMLOrJSONDecoder(
@@ -306,31 +307,25 @@ func (r *KeePassSourceReconciler) applyEntry(ctx context.Context, entry kdbx.Ent
 			return fmt.Errorf("parsing entry %q: %w", entry.Title, err)
 		}
 	}
-
 	// Override namespace if specified
 	if targetNS != "" {
 		obj.SetNamespace(targetNS)
 	}
-
 	// Server-side apply
 	existing := obj.DeepCopy()
 	err := r.Get(ctx, types.NamespacedName{
 		Name:      obj.GetName(),
 		Namespace: obj.GetNamespace(),
 	}, existing)
-
 	if apierrors.IsNotFound(err) {
 		return r.Create(ctx, obj)
 	} else if err != nil {
 		return err
 	}
-
 	// Update existing
 	obj.SetResourceVersion(existing.GetResourceVersion())
 	return r.Update(ctx, obj)
-
 }
-
 func (r *KeePassSourceReconciler) setCondition(source *v1alpha1.KeePassSource, condType string, status metav1.ConditionStatus, reason, message string) {
 	meta.SetStatusCondition(&source.Status.Conditions, metav1.Condition{
 		Type:               condType,
@@ -340,7 +335,6 @@ func (r *KeePassSourceReconciler) setCondition(source *v1alpha1.KeePassSource, c
 		Message:            message,
 	})
 }
-
 func (r *KeePassSourceReconciler) getInterval(interval string) time.Duration {
 	if interval != "" {
 		if d, err := time.ParseDuration(interval); err == nil {
@@ -349,7 +343,6 @@ func (r *KeePassSourceReconciler) getInterval(interval string) time.Duration {
 	}
 	return 5 * time.Minute
 }
-
 func (r *KeePassSourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.KeePassSource{}).
