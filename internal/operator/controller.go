@@ -77,6 +77,10 @@ func (r *KeePassSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if entry.Content == "" {
 			continue
 		}
+		if entry.Attributes["ignore"] == "true" {
+			logger.Info("skipping ignored entry", "title", entry.Title, "group", entry.Group)
+			continue
+		}
 		if err := r.applyEntry(ctx, entry, source.Spec.TargetNamespace); err != nil {
 			logger.Error(err, "failed to apply entry", "title", entry.Title, "group", entry.Group)
 			continue
